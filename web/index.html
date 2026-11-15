@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kinesplat — 3D Gaussian Splatting Studio</title>
+<meta name="description" content="Turn photos or a short video into an interactive 3D Gaussian splat scene. Runs locally on your GPU or CPU." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230d1012'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23b8ff3c'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%230d1012'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="kinesplat home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".35"/><circle cx="12" cy="12" r="4.4" fill="currentColor"/><circle cx="7.2" cy="8.2" r="1.6" fill="currentColor" opacity=".5"/><circle cx="17.4" cy="15.2" r="1.2" fill="currentColor" opacity=".5"/></svg>
+      </span>
+      <span class="brand-text">kinesplat<span class="brand-sub">splat studio</span></span>
+    </a>
+
+    <nav class="tabs" aria-label="Sections">
+      <button class="tab is-active" data-tab="create" type="button">Reconstruct</button>
+      <button class="tab" data-tab="library" type="button">Library <span class="tab-count" id="library-count">1</span></button>
+    </nav>
+
+    <div class="top-actions">
+      <span class="device-pill" id="device-pill" title="Reconstruction runs locally">
+        <svg viewBox="0 0 24 24" class="icon"><rect x="7" y="7" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 3v2m4-2v2M10 19v2m4-2v2M3 10h2m-2 4h2m14-4h2m-2 4h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span id="device-pill-text">Detecting…</span>
+      </span>
+      <button class="ghost-btn" id="help-btn" type="button" title="How it works">How it works</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="sidebar">
+      <!-- ============================================================ create -->
+      <section class="panel-view is-active" id="panel-create">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">New reconstruction</p>
+            <h1>Photos in.<br/>3D scene out.</h1>
+          </div>
+          <div class="orbit-badge" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+        <p class="lede">Drop a short walkthrough video or 12–60 photos of an object, room or garden. A single photo works too — it is rebuilt as a textured mesh with TripoSR. Pretrained depth and differentiable Gaussian splatting do the rest.</p>
+
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Add photos or video">
+          <input type="file" id="file-input" accept="image/*,video/*,.heic,.tif,.tiff" multiple hidden />
+          <div class="dropzone-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3.2A1.8 1.8 0 0 0 5.8 20h12.4a1.8 1.8 0 0 0 1.8-1.8V15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </div>
+          <p class="drop-title">Drop photos or a video</p>
+          <p class="drop-sub">or <span class="linkish">browse files</span> · JPG, PNG, WEBP, MP4, MOV</p>
+        </div>
+
+        <div class="filelist" id="filelist" hidden></div>
+        <p class="drop-sub" id="backend-note" hidden></p>
+
+        <label class="field">
+          <span class="field-label">Scene name</span>
+          <input id="scene-name" type="text" maxlength="60" placeholder="My courtyard" autocomplete="off" />
+        </label>
+
+        <div class="field">
+          <span class="field-label">Quality preset <em id="preset-time">≈ 3 min on CPU</em></span>
+          <div class="preset-grid" id="preset-grid" role="radiogroup" aria-label="Quality preset"></div>
+        </div>
+
+        <button class="primary-btn" id="start-btn" type="button" disabled>
+          <span class="primary-label">Reconstruct in 3D</span>
+          <svg viewBox="0 0 24 24" class="icon"><path d="M5 12h13m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <p class="privacy-note">
+          <svg viewBox="0 0 24 24" class="icon"><path d="M12 3l7 3v5.5c0 4.3-2.9 7.6-7 9.5-4.1-1.9-7-5.2-7-9.5V6l7-3Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Everything runs locally. Photos never leave this computer.
+        </p>
+
+        <!-- active job / progress -->
+        <div class="jobcard" id="jobcard" hidden>
+          <div class="jobcard-top">
+            <div class="jobcard-state">
+              <span class="status-dot" id="job-dot"></span>
+              <span id="job-status-label">Working</span>
+            </div>
+            <span class="jobcard-time" id="job-time">—</span>
+          </div>
+          <h3 id="job-title">Reconstruction</h3>
+          <img class="job-preview" id="job-preview" alt="Live reconstruction preview" hidden />
+          <div class="progress-track"><div class="progress-fill" id="job-progress"></div></div>
+          <div class="jobcard-meta">
+            <span id="job-message">Starting…</span>
+            <span id="job-percent">0%</span>
+          </div>
+          <div class="stage-steps" id="job-steps">
+            <span data-stage="frames">Frames</span>
+            <span data-stage="poses">Poses</span>
+            <span data-stage="depth">Depth</span>
+            <span data-stage="train">Splats</span>
+            <span data-stage="export">Export</span>
+          </div>
+          <div class="jobcard-actions">
+            <button class="mini-btn" id="open-job-btn" type="button" hidden>Open in viewer</button>
+            <button class="mini-btn danger" id="cancel-job-btn" type="button">Cancel</button>
+            <button class="mini-btn" id="log-toggle" type="button">Log</button>
+          </div>
+          <pre class="log" id="job-log" hidden></pre>
+        </div>
+      </section>
+
+      <!-- =========================================================== library -->
+      <section class="panel-view" id="panel-library">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">Library</p>
+            <h1>Your scenes</h1>
+          </div>
+          <button class="icon-btn" id="library-refresh" type="button" title="Refresh">
+            <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <p class="lede small">Bundled showcase and everything you have reconstructed in this browser session.</p>
+        <div class="library-list" id="library-list"></div>
+      </section>
+    </aside>
+
+    <!-- =============================================================== stage -->
+    <section class="stage" id="stage">
+      <div class="viewer" id="viewer">
+        <canvas id="gl" aria-label="3D scene viewer"></canvas>
+        <div class="vignette" aria-hidden="true"></div>
+
+        <div class="stage-head">
+          <div class="stage-title-block">
+            <p class="eyebrow" id="view-eyebrow">Now viewing</p>
+            <h2 id="view-title">Toy Courtyard</h2>
+            <div class="chips" id="view-chips"></div>
+          </div>
+          <div class="stage-head-actions">
+            <button class="round-btn" id="btn-reset" type="button" title="Reset camera">
+              <svg viewBox="0 0 24 24"><path d="M4 11a8 8 0 1 1 2.4 5.7M4 5v6h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="round-btn" id="btn-speed" type="button" title="Orbit speed">
+              <svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1-7.4 5M12 8.5V12l2.6 1.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="empty-state" id="empty-state">
+          <div class="empty-glow" aria-hidden="true"></div>
+          <div class="empty-card">
+            <p class="eyebrow">kinesplat</p>
+            <h2>A tiny 3D<br/>splat studio.</h2>
+            <p>Reconstruct a scene from photos, or explore the bundled <strong>Toy Courtyard</strong> shot with 48 synthetic views.</p>
+            <div class="empty-actions">
+              <button class="primary-btn" id="btn-demo" type="button">Explore the demo <svg viewBox="0 0 24 24" class="icon"><path d="M5 12h13m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button class="secondary-btn" id="btn-upload-empty" type="button">Add your photos</button>
+            </div>
+            <div class="empty-stats">
+              <div><span>48</span><em>demo views</em></div>
+              <div><span id="stat-device">GPU</span><em id="stat-device-note">CUDA accel</em></div>
+              <div><span>&lt;2 GB</span><em>CPU install</em></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="viewer-loading" id="viewer-loading" hidden>
+          <div class="loader-ring"></div>
+          <p id="loading-label">Loading splats…</p>
+          <div class="loading-track"><div class="loading-fill" id="loading-fill"></div></div>
+        </div>
+
+        <div class="drop-overlay" id="drop-overlay" hidden>
+          <div>
+            <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3.2A1.8 1.8 0 0 0 5.8 20h12.4a1.8 1.8 0 0 0 1.8-1.8V15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <strong>Drop to add photos</strong>
+          </div>
+        </div>
+
+        <div class="stage-bottom">
+          <div class="view-toolbar" role="toolbar" aria-label="Viewer tools">
+            <button class="tool-btn is-active" id="btn-orbit" type="button" title="Orbit">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="currentColor"/><ellipse cx="12" cy="12" rx="9" ry="4" fill="none" stroke="currentColor" stroke-width="1.4" transform="rotate(-24 12 12)"/></svg>
+              <span>Orbit</span>
+            </button>
+            <button class="tool-btn" id="btn-auto" type="button" title="Auto-rotate">
+              <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 9m0-5v5h-5M20 12a8 8 0 0 1-13.7 5.6L4 15m0 5v-5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Auto</span>
+            </button>
+            <button class="tool-btn" id="btn-cams" type="button" title="Show capture cameras">
+              <svg viewBox="0 0 24 24"><path d="M4 7h10v10H4z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m14 10 5-3v10l-5-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+              <span>Cameras</span>
+            </button>
+            <button class="tool-btn" id="btn-density" type="button" title="Toggle splat size">
+              <svg viewBox="0 0 24 24"><circle cx="7" cy="8" r="1.6" fill="currentColor"/><circle cx="12" cy="7" r="1.1" fill="currentColor"/><circle cx="17" cy="9" r="1.8" fill="currentColor"/><circle cx="9" cy="14" r="1.2" fill="currentColor"/><circle cx="14" cy="13" r="1.7" fill="currentColor"/><circle cx="7" cy="18" r="1.4" fill="currentColor"/><circle cx="16" cy="18" r="1.2" fill="currentColor"/></svg>
+              <span>Splat size</span>
+            </button>
+            <span class="toolbar-sep"></span>
+            <button class="tool-btn" id="btn-shot" type="button" title="Save screenshot">
+              <svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+              <span>Save</span>
+            </button>
+            <button class="tool-btn" id="btn-full" type="button" title="Fullscreen">
+              <svg viewBox="0 0 24 24"><path d="M9 4H4v5M15 4h5v5M15 20h5v-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              <span>Full</span>
+            </button>
+          </div>
+          <p class="hint">Drag to orbit · scroll to zoom · right-drag to pan</p>
+        </div>
+      </div>
+
+      <div class="timeline" id="timeline" hidden></div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal" id="help-modal" hidden>
+    <div class="modal-card">
+      <button class="modal-close" id="help-close" type="button" aria-label="Close">×</button>
+      <p class="eyebrow">Under the hood</p>
+      <h2>How kinesplat works</h2>
+      <ol class="steps">
+        <li><span>01</span><div><strong>Frames</strong><p>Photos or a video are resized, ordered and lightly prepared for reconstruction.</p></div></li>
+        <li><span>02</span><div><strong>Cameras</strong><p>Poses come from bundled calibration, COLMAP when available, or kinesplat's built-in SfM with global rotation averaging.</p></div></li>
+        <li><span>03</span><div><strong>Depth</strong><p>Depth Anything V2 Small — a pretrained ONNX model — predicts dense depth for every frame.</p></div></li>
+        <li><span>04</span><div><strong>Splats</strong><p>Depth pixels become 3D Gaussians, optimised with a differentiable rasteriser on your GPU (or CPU) and exported as a standard 32-byte <code>.splat</code>.</p></div></li>
+      </ol>
+      <p class="modal-foot">No cloud, nothing uploaded. The viewer is a custom WebGL2 instanced splat renderer with depth sorting.</p>
+    </div>
+  </div>
+
+  <div class="modal" id="confirm-modal" hidden>
+    <div class="modal-card narrow">
+      <p class="eyebrow">Delete scene</p>
+      <h2 id="confirm-title">Remove this scene?</h2>
+      <p class="modal-foot">The reconstruction files will be deleted from this computer. This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="secondary-btn" id="confirm-cancel" type="button">Keep it</button>
+        <button class="primary-btn danger" id="confirm-ok" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "/vendor/three.module.js" } }
+</script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

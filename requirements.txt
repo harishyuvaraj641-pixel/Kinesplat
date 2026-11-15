@@ -1,0 +1,23 @@
+# SplatLab runtime dependencies.
+# PyTorch is installed by setup.ps1 from the selected CPU/CUDA index.
+numpy>=2.0
+opencv-python>=4.9
+onnxruntime>=1.18
+pillow>=10.0
+tqdm>=4.66
+scipy>=1.11
+# Single-photo mesh backend: these match the official TripoSR reference.
+einops==0.7.0
+omegaconf==2.3.0
+trimesh==4.0.5
+transformers==4.35.2
+huggingface-hub<1
+rembg
+imageio[ffmpeg]
+xatlas==0.0.9
+moderngl==5.10.0
+# The official CUDA/CPU marching-cubes extension.  The vendored fallback keeps
+# existing installs usable if a local compiler is unavailable.
+# git+https://github.com/tatsy/torchmcubes.git
+# Fallback marching cubes and the existing multi-view pipeline.
+scikit-image>=0.22
