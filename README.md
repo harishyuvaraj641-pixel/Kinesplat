@@ -324,7 +324,7 @@ jobs/<id>/work/output/
 
 <div align="center">
 
-**Built with 💜 and Gaussian Splats**
+
 
 *If this project helped you, consider giving it a ⭐*
 
